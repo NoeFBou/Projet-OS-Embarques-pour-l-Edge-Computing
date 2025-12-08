@@ -1,0 +1,27 @@
+Arduino:
+coffre qui s ouvre avec 3 capteurs à rotations.
+definir la combinaison :
+- on ferme le coffre (capteur ultrason)
+- on tourne les bouttons
+- on attend 10 secondes
+- le led rouge s'allume
+- on retourne les bouttons pour brouiller la com
+
+ouverture du coffre :
+- on tourne les bouttons sur la bonne combinaison
+- on attend 10 secondes
+- le led vert s'allume
+- on peut ouvrir le coffre
+- si la combinaison est mauvaise, le led verte reste eteint
+
+mot de passe mauvais et forcage de la porte :
+- la porte s'ouvre (capteur ultrason) et la combinaison est mauvaise
+- le buzzer s'allume
+
+Raspberry Pi :
+deverrouillage depuis le raspberry pi et reinitialiser la combinaison
+arreter le buzzer
+definir une nouvelle combinaison depuis le raspberry pi
+
+
+
