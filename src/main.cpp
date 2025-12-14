@@ -4,6 +4,7 @@
 #include "task.h"
 #include <avr/io.h>
 #include <Wire.h>
+#include <Grove_LED_Bar.h>
 
 #define IS_CLOSE_ENOUGH(a, b, eps) \
         (((a) > (b) ? (a) - (b) : (b) - (a)) <= (eps))
@@ -32,7 +33,7 @@ static void vGreenBlinkLed(void* pvParameters);
 static void vSecurityCheck(void* pvParameters);
 void receiveEvent(int howMany);
 void requestEvent();
-
+Grove_LED_Bar bar(9, 8, 0);
 const uint8_t redLed   = _BV(PD2);
 const uint8_t greenLed = _BV(PD3);
 const uint8_t resetBtn = _BV(PD4);
@@ -86,7 +87,8 @@ int main(void)
     Wire.begin(SLAVE_ADDRESS);
     Wire.onReceive(receiveEvent);
     Wire.onRequest(requestEvent);
-
+    bar.begin();
+    bar.setLevel(0);
     // Create task #1
     TaskHandle_t codeUpdate_handle;
     xTaskCreate                     //documented here: https://www.freertos.org/a00125.html
@@ -146,6 +148,7 @@ void receiveEvent(int howMany) {
             silence_buzzer = false;
             PORTD &= ~redLed;
             PORTD &= ~buzzerPin;
+            bar.setLevel(0);
             //Serial.println(F("[I2C] Unlock"));
         }
         else if (command == 'S') { // SILENCE
@@ -169,11 +172,12 @@ void receiveEvent(int howMany) {
         }
         else if (command == 'L') { // LENGTH
             if (Wire.available() >= 1) {
-                logs.current_code_length = Wire.read();
-                use_hardware_config = false;
-                is_password_set = 0;
-                PORTD &= ~redLed;
-                silence_buzzer = false;
+                uint8_t newLen = Wire.read();
+                if (is_password_set == 0) {
+                    logs.current_code_length = newLen;
+                    use_hardware_config = false;
+                    bar.setLevel(0);
+                }
             }
         }
         else if (command == 'C') { // SET CODE
@@ -190,6 +194,7 @@ void receiveEvent(int howMany) {
                 silence_buzzer = false;
                 use_hardware_config = false;
                 PORTD |= redLed;
+                bar.setLevel(10);
             } else {
                 while(Wire.available()) Wire.read();
             }
@@ -238,10 +243,12 @@ static void vSecurityCheck(void* pvParameters) {
                     alarm_start_time = xTaskGetTickCount();
                     PORTD |= buzzerPin;
                     Serial.println(F("[ALARM] Intrusion detected!"));
+                    bar.setLevel(10);
                 }
                 else {
                     if ((xTaskGetTickCount() - alarm_start_time) > pdMS_TO_TICKS(3000)) {
                         PORTD &= ~buzzerPin;
+                        bar.setLevel(0);
                     } else {
                         PORTD |= buzzerPin;
                     }
@@ -268,13 +275,10 @@ static void vUpdateCode(void* pvParameters) {
     uint8_t new_value = 0;
     uint16_t last_digit_read;
     last_digit_read = read_adc(0);
-    //current_digit_read = last_digit_read;
     uint8_t combination[MAX_COMBINATION_SIZE] = {0};
     uint8_t index = 0;
     uint16_t last_raw_len_read = 0;
     uint16_t last_raw_delay_read = 0;
-  //  uint8_t active_length = 4;
-    //uint16_t active_delay = 500;
     last_raw_len_read = read_adc(1);
     last_raw_delay_read = read_adc(2);
 
@@ -300,12 +304,17 @@ static void vUpdateCode(void* pvParameters) {
             uint16_t new_delay_mapped = map_value(raw_delay, 0, 1023, 200, 2000);
 
             if (new_len_mapped != logs.current_code_length) {
-                taskENTER_CRITICAL();
-                logs.current_code_length = new_len_mapped;
-                taskEXIT_CRITICAL();
-                index = 0;
-                Serial.print(F("Config Hard: Length="));
-                Serial.println(new_len_mapped);
+                if (is_password_set == 0) {
+                    taskENTER_CRITICAL();
+                    logs.current_code_length = new_len_mapped;
+                    taskEXIT_CRITICAL();
+                    index = 0;
+                    bar.setLevel(0);
+                    Serial.print(F("Config Hard: Length="));
+                    Serial.println(new_len_mapped);
+                } else {
+                    Serial.println(F("Action refusee: Coffre verrouille !"));
+                }
             }
 
             if (new_delay_mapped != logs.current_delay_ms) {
@@ -321,6 +330,7 @@ static void vUpdateCode(void* pvParameters) {
         //reset combination input
         if ( (PIND & resetBtn) ) {
             index = 0;
+            bar.setLevel(0);
             Serial.println(F("--- Combination input reset ---"));
             vTaskDelay(pdMS_TO_TICKS(200));
             PORTD |= redLed; vTaskDelay(pdMS_TO_TICKS(100));
@@ -330,26 +340,7 @@ static void vUpdateCode(void* pvParameters) {
                 vTaskDelay(pdMS_TO_TICKS(10));
             }
         }
-       // uint8_t new_len = map_value(raw_len, 0, 1023, 1, 10);
         uint16_t current_digit_read = read_adc(0);
-        // reset combination when length is changed
-     /*   if (new_len != active_length) {
-            active_length = new_len;
-            taskENTER_CRITICAL();
-            logs.current_code_length = active_length;
-            taskEXIT_CRITICAL();
-            index = 0;
-            Serial.print(F("--- New code length: "));
-            Serial.println(active_length);
-        }
-*/
-        // delay change
-        /*
-        active_delay = map_value(raw_delay, 0, 1023, 200, 2000);
-        taskENTER_CRITICAL();
-        logs.current_delay_ms = active_delay;
-        taskEXIT_CRITICAL();
-        */
 
         //debounce
         if (!IS_CLOSE_ENOUGH(current_digit_read, last_digit_read, 10)) {
@@ -365,7 +356,7 @@ static void vUpdateCode(void* pvParameters) {
             Serial.print(F("Registering new input: "));
             Serial.println(digit);
             combination[index++] = digit;
-
+            bar.setLevel(index);
             if (index >= active_length) {
                 if (is_password_set == 0) {
                     for(uint8_t i = 0; i < active_length; i++) {
@@ -378,6 +369,9 @@ static void vUpdateCode(void* pvParameters) {
                         Serial.print(saved_combination[i]);
                     Serial.println(F("Locking"));
                     PORTD |= redLed;
+                    bar.setBits(0x3FF);
+                    vTaskDelay(pdMS_TO_TICKS(200));
+                    bar.setLevel(0);
                 }
                 else {
                     taskENTER_CRITICAL();
@@ -400,6 +394,12 @@ static void vUpdateCode(void* pvParameters) {
                         is_password_set = 0;
                         PORTD &= ~redLed;
                         //PORTD &= ~buzzerPin;
+                        for(int i=0;i<=10;i++) {
+                            bar.setLevel(i);
+                            vTaskDelay(pdMS_TO_TICKS(30));
+                        }
+                        vTaskDelay(pdMS_TO_TICKS(200));
+                        bar.setLevel(0);
                     }
                     else {
                         taskENTER_CRITICAL();
@@ -408,6 +408,9 @@ static void vUpdateCode(void* pvParameters) {
                         taskEXIT_CRITICAL();
                         Serial.println(F(">> CODE INCORRECT ! Acces refuse."));
                       //  PORTD &= ~redLed; vTaskDelay(100); PORTD |= redLed;
+                        bar.setLevel(0); vTaskDelay(pdMS_TO_TICKS(100));
+                        bar.setLevel(active_length); vTaskDelay(pdMS_TO_TICKS(100));
+                        bar.setLevel(0);
                     }
                 }
                 index = 0;
