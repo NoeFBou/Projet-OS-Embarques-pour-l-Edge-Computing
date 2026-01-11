@@ -1,7 +1,7 @@
 /**
 * @file main.cpp
 * @brief Système de coffre-fort connecté basé sur FreeRTOS pour Arduino Uno.
-* @author equiepe coffre
+* @author equipe coffre
 * @date 2025-2026
 *
 * Ce système gère :
