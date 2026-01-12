@@ -101,7 +101,7 @@ const uint8_t ultraPin  = _BV(PD7); ///< Ultrason sur D7
 
 // Tâches FreeRTOS
 static void vUpdateCode(void* pvParameters);
-static void vGreenBlinkLed(void* pvParameters);
+//static void vGreenBlinkLed(void* pvParameters);
 static void vSecurityCheck(void* pvParameters);
 
 // Gestion I2C
