@@ -70,7 +70,7 @@ Script d'administration CLI tournant sur le Raspberry Pi.
 ## Installation & Utilisation
 
 ### Prérequis
-1.  Installer **Arduino IDE** et les bibliothèques : `FreeRTOS`, `Grove_LED_Bar`.
+1.  Installer les bibliothèques : `FreeRTOS`, `Grove_LED_Bar`.
 2.  Activer l'I2C sur le Raspberry Pi (`sudo raspi-config`).
 3.  Installer les dépendances Python : `sudo apt-get install python3-smbus`.
 
